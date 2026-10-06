@@ -1,0 +1,22 @@
+# GitHub Pages settings. In the repository: Settings → Pages → Source: "Deploy from a branch",
+# Branch: main, Folder: /docs
+title: Meshtastic LoRa mesh for Kathmandu
+description: >-
+  A beginner-friendly guide and open-source control panel for Meshtastic LoRa mesh radios
+  in Nepal (NP_865, 865–868 MHz): Heltec V3 and Seeed XIAO ESP32S3 setup, Paxcounter,
+  MQTT map reporting, troubleshooting and a live web dashboard.
+lang: en
+url: https://saadcaffeine.github.io
+baseurl: /Meshtastic-GOSHkathmandu
+repository: saadcaffeine/Meshtastic-GOSHkathmandu
+theme: jekyll-theme-cayman
+author: Saad Chinoy
+github_username: saadcaffeine
+plugins:
+  - jekyll-seo-tag
+  - jekyll-sitemap
+defaults:
+  - scope:
+      path: ""
+    values:
+      image: /assets/img/panel-overview.png

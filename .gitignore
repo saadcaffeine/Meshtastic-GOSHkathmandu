@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Panel data and local diagnostics (may contain node IDs and positions)
+panel/data/
+tools/report_*.json
+diag/
+*_bak
+
+# Jekyll / GitHub Pages local builds
+docs/_site/
+docs/.jekyll-cache/
+docs/Gemfile.lock
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

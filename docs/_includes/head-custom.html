@@ -1,0 +1,17 @@
+{%- comment -%} Structured data so search and answer engines understand the project. {%- endcomment -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareSourceCode",
+  "name": "Meshtastic LoRa mesh for Kathmandu",
+  "description": "{{ site.description | strip | escape }}",
+  "codeRepository": "https://github.com/{{ site.repository }}",
+  "programmingLanguage": ["Python", "JavaScript"],
+  "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+  "author": {"@type": "Person", "name": "{{ site.author }}", "url": "https://github.com/{{ site.github_username }}"},
+  "about": ["Meshtastic", "LoRa", "Mesh networking", "Paxcounter", "MQTT", "Nepal", "NP_865"],
+  "isBasedOn": "https://meshtastic.org/",
+  "url": "{{ site.url }}{{ site.baseurl }}/"
+}
+</script>
+<meta name="keywords" content="Meshtastic, LoRa, Nepal, Kathmandu, NP_865, 865 MHz, Heltec V3, Seeed XIAO ESP32S3, Wio-SX1262, Paxcounter, MQTT, meshmap, off-grid messaging, mesh network">

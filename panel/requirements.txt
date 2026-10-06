@@ -1,0 +1,3 @@
+flask
+meshtastic
+paho-mqtt

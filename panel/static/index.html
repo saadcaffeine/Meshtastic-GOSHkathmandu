@@ -1,0 +1,1176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meshtastic panel</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb;
+    --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+    --s1: #2a78d6; --s2: #eb6834;
+    --good: #0ca30c; --warn: #fab219; --crit: #d03b3b;
+    --wash: rgba(11,11,11,0.05); --accent-wash: rgba(42,120,214,0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19;
+      --ink: #ffffff; --ink2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+      --s1: #3987e5; --s2: #d95926;
+      --wash: rgba(255,255,255,0.06); --accent-wash: rgba(57,135,229,0.16);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 16px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  h2 { font-size: 13px; margin: 0 0 10px; font-weight: 600; color: var(--ink2); }
+  .tag { font-size: 12px; color: var(--ink2); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; margin-left: 8px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; background: var(--surface); }
+  .connwrap { position: relative; display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .connwrap .pill { min-width: 0; }
+  #connText { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .infobtn { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--ink2); font: italic 700 14px Georgia, "Times New Roman", serif; cursor: pointer; padding: 0; }
+  .infobtn:hover, .infobtn[aria-expanded=true] { background: var(--wash); color: var(--ink); }
+  .popover { position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; width: min(380px, calc(100vw - 32px)); max-height: 70vh; overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,0.16); padding: 12px 14px; }
+  .popover h3 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 10px 0 4px; font-weight: 600; }
+  .popover h3:first-child { margin-top: 0; }
+  .popover dl { display: grid; grid-template-columns: 8.5em 1fr; gap: 3px 12px; margin: 0; }
+  .popover dt { color: var(--ink2); }
+  .popover dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .popover .note { color: var(--ink2); font-size: 12px; margin-top: 8px; }
+  .ico { font-weight: 700; width: 16px; text-align: center; }
+  .ok { color: var(--good); } .bad { color: var(--crit); }
+  .warnc { color: #b87c00; }
+  @media (prefers-color-scheme: dark) { .warnc { color: var(--warn); } }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .grow { flex: 1 1 320px; min-width: 0; }
+  .muted { color: var(--muted); } .sec { color: var(--ink2); }
+  .nodebar { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; }
+  .nodebar .name { font-size: 16px; font-weight: 600; }
+  .badge { background: var(--accent-wash); border-radius: 6px; padding: 2px 8px; font-weight: 600; }
+
+  /* mode cards */
+  .modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+  .mode { text-align: left; font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; cursor: pointer; }
+  .mode:hover:not(:disabled) { background: var(--wash); }
+  .mode:disabled { cursor: not-allowed; opacity: .6; }
+  .mode.current { outline: 2px solid var(--s1); outline-offset: -2px; }
+  .mode.pending { background: var(--accent-wash); }
+  .mode .t { font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+  .mode .s { color: var(--ink2); margin-top: 4px; font-size: 13px; }
+  .confirm { margin-top: 12px; padding: 12px; border-radius: 10px; background: var(--wash); display: none; }
+  .confirm.on { display: block; }
+  .confirm .line { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 8px; }
+  input, button.act, button.ghost { font: inherit; }
+  input[type=number], input[type=password] { background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; width: 120px; }
+  button.act { background: var(--s1); color: #fff; border: 0; border-radius: 8px; padding: 7px 14px; font-weight: 600; cursor: pointer; }
+  button.act:disabled { opacity: .5; cursor: not-allowed; }
+  button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  button.ghost:hover { background: var(--wash); }
+  .switchmsg { margin-top: 10px; display: none; }
+  .switchmsg.on { display: block; }
+
+  /* filters */
+  .filters { display: flex; gap: 8px; align-items: center; margin: 4px 0 10px; flex-wrap: wrap; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { font: inherit; color: var(--ink); background: var(--surface); border: 0; padding: 5px 12px; cursor: pointer; }
+  .seg button:hover { background: var(--wash); }
+  .seg button[aria-pressed=true] { font-weight: 700; box-shadow: inset 0 -2px 0 var(--s1); }
+
+  /* pax */
+  .hero { font-size: 56px; line-height: 1.05; font-weight: 600; letter-spacing: -0.02em; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 8px 0 4px; color: var(--ink2); }
+  .key { display: inline-block; width: 14px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
+  .chartbox { position: relative; }
+  svg text { fill: var(--muted); font: 11px system-ui, sans-serif; }
+  svg .endlab { fill: var(--ink2); font-weight: 600; }
+  .tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); min-width: 140px; display: none; z-index: 5; }
+  .tip .time { color: var(--ink2); font-size: 12px; margin-bottom: 4px; }
+  .tip .r { display: flex; gap: 8px; align-items: center; }
+  .tip .v { font-weight: 700; }
+  .tip .l { color: var(--ink2); }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-weight: 600; color: var(--ink2); font-size: 12px; padding: 4px 8px 6px 0; border-bottom: 1px solid var(--grid); }
+  td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+  .num { text-align: right; }
+  .scroll { overflow-x: auto; }
+
+  /* tiles */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .tile { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  .tile .k { color: var(--ink2); font-size: 12px; }
+  .tile .v { font-size: 22px; font-weight: 600; margin-top: 2px; }
+
+  /* bars */
+  .bars { display: grid; grid-template-columns: minmax(90px, 140px) 1fr; gap: 6px 10px; align-items: center; }
+  .bars .lab { color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bartrack { display: flex; align-items: center; gap: 8px; height: 22px; }
+  .bar { height: 14px; min-width: 2px; background: var(--s1); border-radius: 0 4px 4px 0; }
+  .bartrack .val { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .status { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; }
+  .events { max-height: 220px; overflow: auto; font-variant-numeric: tabular-nums; }
+  .events div { padding: 2px 0; }
+  .banner { display: none; background: var(--wash); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; margin-bottom: 12px; }
+  .banner.on { display: block; }
+  .stale main { opacity: .6; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 820px) { .two { grid-template-columns: 1fr; } .hero { font-size: 48px; } }
+
+  /* live flow diagram */
+  .flowbox svg { width: 100%; height: auto; display: block; }
+  .flowbox text { fill: var(--ink); font: 13px system-ui, sans-serif; }
+  .flowbox .sub { fill: var(--muted); font-size: 11px; }
+  .flowbox .cap { fill: var(--muted); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+  .flowbox .wire { fill: none; stroke: var(--ink2); stroke-width: 1.6; stroke-opacity: .55; }
+  .flowbox .wire.idle { stroke-dasharray: 3 5; stroke-opacity: .3; }
+  .flowbox .tile { fill: #f4f4f1; stroke: var(--border); }
+  .flowbox .shape { fill: none; stroke: #4a4944; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .flowbox .me { fill: none; stroke: var(--s1); stroke-width: 2; }
+  .flowbox .dot { fill: var(--s1); offset-rotate: 0deg; animation: flowdot linear infinite; }
+  .flowbox .dot.out { fill: var(--s2); }
+  @keyframes flowdot { from { offset-distance: 0%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } to { offset-distance: 100%; opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .flowbox .dot { animation: none; display: none; } }
+
+  /* raw data drawer */
+  details.rawbox > summary { cursor: pointer; font-weight: 600; color: var(--ink2); }
+  details.rawbox[open] > summary { margin-bottom: 10px; }
+  .rawbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+  pre.raw { margin: 0; max-height: 360px; overflow: auto; background: var(--wash); border-radius: 8px; padding: 10px 12px; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word; }
+  pre.raw .h { color: var(--s1); font-weight: 700; display: block; margin-top: 8px; }
+
+  /* live packets: LEDs + collapsible JSON */
+  :root { --led-off: #d6d5cf; --led-on: #22c55e; --led-glow: rgba(34,197,94,.65); --led-warm: #8fd9a8; }
+  @media (prefers-color-scheme: dark) { :root { --led-off: #3a3a37; --led-on: #4ade80; --led-glow: rgba(74,222,128,.7); --led-warm: #2f6f45; } }
+  .led { flex: none; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--led-off);
+         box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); transition: background 1.2s ease-out, box-shadow 1.2s ease-out; }
+  .led.warm { background: var(--led-warm); }
+  .led.on { background: var(--led-on); box-shadow: 0 0 7px 2px var(--led-glow), inset 0 0 0 1px rgba(0,0,0,.1); transition: none; }
+  .ledgroup { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+  .ledcap { width: 58px; flex: none; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .leds { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
+  .ledchip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px 3px 8px; font-size: 12px; color: var(--ink2); white-space: nowrap; }
+  .ledchip b { color: var(--ink); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .pkts { max-height: 420px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+  .pkts .empty { padding: 12px; color: var(--muted); }
+  details.pkt { border-bottom: 1px solid var(--grid); }
+  details.pkt:last-child { border-bottom: 0; }
+  details.pkt > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 12px 64px 96px minmax(0, 1fr) minmax(0, 2fr) 210px; gap: 10px; align-items: center; padding: 6px 10px; font-size: 13px; }
+  details.pkt > summary::-webkit-details-marker { display: none; }
+  details.pkt > summary:hover { background: var(--wash); }
+  details.pkt[open] > summary { background: var(--wash); }
+  .pkt .t { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+  .pkt .type { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pkt .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pkt .what { color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pkt .sig { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; overflow: hidden; text-overflow: ellipsis; }
+  .pkt .chev { display: inline-block; transition: transform .15s; color: var(--muted); margin-left: 4px; }
+  details.pkt[open] .chev { transform: rotate(90deg); }
+  .pkt pre { margin: 0; padding: 8px 12px 10px 32px; background: var(--wash); font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word; }
+  @media (max-width: 640px) {
+    details.pkt > summary { grid-template-columns: 12px 64px minmax(0, 1fr); row-gap: 2px; }
+    .pkt .who, .pkt .what, .pkt .sig { grid-column: 3; text-align: left; }
+    .ledcap { width: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) { .led, .pkt .chev { transition: none; } }
+
+  /* node identity colours (categorical palette, same everywhere a node appears) */
+  :root { --n1: #1baf7a; --n2: #eda100; --n3: #e87ba4; --n4: #4a3aa7; --n5: #e34948; --n6: #008300; --n7: #2a78d6; --n8: #eb6834; }
+  @media (prefers-color-scheme: dark) { :root { --n1: #199e70; --n2: #c98500; --n3: #d55181; --n4: #9085e9; --n5: #e66767; --n6: #008300; --n7: #3987e5; --n8: #d95926; } }
+  .spot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: none; margin-right: 6px; vertical-align: 0; box-shadow: 0 0 0 2px var(--surface); }
+  /* minimalist indicators */
+  .ind { display: inline-flex; align-items: center; gap: 4px; color: var(--ink2); white-space: nowrap; vertical-align: middle; }
+  .ind svg { display: block; flex: none; overflow: visible; }
+  .ind svg * { transition: opacity .4s, fill-opacity .4s, stroke-dashoffset .6s; }
+  .ind .v { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .ind + .ind { margin-left: 8px; }
+  .tile .v .ind { gap: 8px; color: var(--ink2); }
+  .tile .v .ind .v { font-size: 22px; font-weight: 600; }
+  #nodes { min-width: 820px; }
+  #nodes td.num { white-space: nowrap; }
+  .tablead { margin-left: 6px; width: 8px; height: 8px; vertical-align: 1px; }
+  details.rawbox > summary .led { margin-left: 8px; width: 8px; height: 8px; vertical-align: 1px; }
+  :focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap" id="root">
+  <header>
+    <h1>Meshtastic panel<span class="tag" id="mockTag" hidden>simulated board</span></h1>
+    <div class="connwrap">
+      <div class="pill" id="conn" role="status"><span class="ico" id="connIco">…</span><span id="connText">Connecting</span></div>
+      <button type="button" class="infobtn" id="connInfoBtn" aria-expanded="false" aria-controls="connInfo" aria-label="Board and USB details" title="Board and USB details">i</button>
+      <div class="popover" id="connInfo" role="dialog" aria-label="Board and USB details" hidden></div>
+    </div>
+  </header>
+  <div class="banner" id="banner" role="status"></div>
+
+  <main>
+    <section class="card" aria-label="Node">
+      <div class="nodebar" id="nodebar"><span class="muted">Waiting for the board…</span></div>
+    </section>
+
+    <section class="card" aria-label="Operating mode">
+      <h2>Operating mode</h2>
+      <div class="modes" id="modes"></div>
+      <div class="confirm" id="confirm">
+        <div id="confirmText"></div>
+        <div class="line">
+          <label id="intervalWrap" hidden>Report every <input type="number" id="interval" min="30" max="3600" value="60"> seconds</label>
+          <label id="tokenWrap" hidden>Access token <input type="password" id="token" autocomplete="off"></label>
+          <button class="act" id="apply">Apply</button>
+          <button class="ghost" id="cancel">Cancel</button>
+        </div>
+      </div>
+      <div class="switchmsg" id="switchmsg" role="status"></div>
+    </section>
+
+    <div class="filters" role="group" aria-label="Time range">
+      <span class="sec">Time range</span>
+      <div class="seg" id="range">
+        <button data-r="600" aria-pressed="true">10 min</button>
+        <button data-r="3600" aria-pressed="false">1 hour</button>
+        <button data-r="0" aria-pressed="false">All</button>
+      </div>
+    </div>
+
+    <section class="card" aria-label="Devices nearby">
+      <div class="row">
+        <div style="flex:0 0 auto; min-width:200px">
+          <h2>Devices nearby</h2>
+          <div class="hero" id="hero">–</div>
+          <div class="sec" id="heroSub">No readings yet</div>
+          <div style="margin-top:12px"><a id="csv" href="/api/pax.csv" class="sec">Download readings (CSV)</a></div>
+        </div>
+        <div class="grow">
+          <div class="legend" id="legend"></div>
+          <div class="chartbox" id="chartbox">
+            <svg id="chart" width="100%" height="240" role="img" aria-label="WiFi and Bluetooth device counts over time"></svg>
+            <div class="tip" id="tip" role="status"></div>
+          </div>
+          <div style="margin-top:6px"><button class="ghost" id="tableBtn" aria-expanded="false">Show table</button></div>
+          <div class="scroll" id="tableWrap" hidden></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card flowbox" aria-label="Live flow">
+      <h2>Live view: what this node hears and where it goes</h2>
+      <div id="flow"></div>
+      <div class="legend" style="margin-top:6px">
+        <span>Incoming dots take the colour of the node that sent them</span>
+        <span><span class="key" style="border-color:var(--s2)"></span>leaving the board</span>
+        <span class="muted">Dashed lines are quiet or switched off. Pictures come from meshtastic.org when your browser is online; otherwise a drawn shape is used.</span>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Node status">
+      <h2>Node status</h2>
+      <div class="tiles" id="tiles"></div>
+    </section>
+
+    <section class="card" aria-label="Nodes heard">
+      <h2>Nodes</h2>
+      <div class="sec" style="margin:-4px 0 8px">Times come from this computer's clock, counted from each packet the board passes over USB. Hover a cell for details.</div>
+      <div class="scroll"><table id="nodes"></table></div>
+    </section>
+
+    <div class="two">
+      <section class="card" aria-label="Packets">
+        <h2>Packets seen</h2>
+        <div class="sec" id="heard"></div>
+        <div class="bars" id="bars" style="margin-top:10px"></div>
+        <div class="status" id="brokerStatus"></div>
+      </section>
+      <section class="card" aria-label="Event log">
+        <h2>Event log</h2>
+        <div class="events" id="events"></div>
+      </section>
+    </div>
+
+    <details class="card rawbox" id="raw">
+      <summary>Raw data (for debugging)<span class="led" id="sumLed" aria-hidden="true" title="Flashes when a packet arrives"></span></summary>
+      <div class="sec" style="margin-bottom:8px">What the board reports, like <code>meshtastic --info</code> and <code>meshtastic --listen</code>. Private keys, channel keys and passwords are hidden.</div>
+      <div class="rawbar">
+        <div class="seg" id="rawTabs">
+          <button type="button" data-t="packets" aria-pressed="true">Live packets<span class="led tablead" id="tabLed" aria-hidden="true"></span></button>
+          <button type="button" data-t="info" aria-pressed="false">Board info</button>
+        </div>
+        <label id="rawTokenWrap" hidden>Access token <input type="password" id="rawToken" autocomplete="off"></label>
+        <button type="button" class="ghost" id="rawRefresh">Refresh</button>
+        <button type="button" class="ghost" id="rawPause" aria-pressed="false">Pause</button>
+        <button type="button" class="ghost" id="pktExpand">Expand all</button>
+        <button type="button" class="ghost" id="pktCollapse">Collapse all</button>
+        <button type="button" class="ghost" id="rawCopy">Copy</button>
+        <span class="sec" id="rawMsg" role="status"></span>
+      </div>
+      <pre class="raw" id="rawOut" tabindex="0" hidden>Open to load.</pre>
+      <div id="pktView">
+        <div class="ledgroup"><span class="ledcap">By type</span><div class="leds" id="ledTypes"></div></div>
+        <div class="ledgroup"><span class="ledcap">By node</span><div class="leds" id="ledNodes"></div></div>
+        <div class="pkts" id="pktList" aria-live="off"></div>
+      </div>
+    </details>
+  </main>
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+const clear = (n) => { while (n.firstChild) n.removeChild(n.firstChild); };
+const SVGNS = "http://www.w3.org/2000/svg";
+const sv = (tag, attrs) => { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
+
+let S = null;               // latest state from the server
+let rangeSec = 600;
+let pending = null;         // mode picked but not yet applied
+let modesBuilt = false;
+let hoverIdx = null;
+let tableOpen = false;
+
+function ago(ts) {
+  if (!ts) return "never";
+  const s = Math.max(0, Math.round(S.now - ts));
+  if (s < 5) return "just now";
+  if (s < 90) return s + " s ago";
+  if (s < 5400) return Math.round(s / 60) + " min ago";
+  return Math.round(s / 3600) + " h ago";
+}
+function dur(s) {
+  if (s == null) return "–";
+  if (s < 90) return s + " s";
+  if (s < 5400) return Math.round(s / 60) + " min";
+  return (s / 3600).toFixed(1) + " h";
+}
+function clock(ts) { return new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
+function pct(v) { return v == null ? "–" : (Math.round(v * 10) / 10) + "%"; }
+function onoff(v) { return v == null ? "–" : v ? "On" : "Off"; }
+function prettyPort(p) { return p.replace(/_APP$/, "").replace(/_/g, " ").toLowerCase(); }
+
+/* ---------- header, node strip ---------- */
+function renderHeader() {
+  $("mockTag").hidden = !S.mock;
+  const sw = S.switch.state;
+  const c = S.conn || {};
+  const path = (c.device_path || "").replace(/^\/dev\//, "");
+  let ico = "✓", cls = "ok", text = "Connected" + (path ? " · " + path : "") + (c.connected_at ? " · " + dur(Math.round(S.now - c.connected_at)) : "");
+  if (sw === "applying" || sw === "waiting") { ico = "↻"; cls = "warnc"; text = "Restarting · waiting for the board"; }
+  else if (!S.connected) {
+    ico = "✕"; cls = "bad";
+    text = "Not connected" + (c.last_lost ? " · lost " + ago(c.last_lost) : c.last_connected ? "" : " · no board seen yet");
+    if (S.error) text += " · " + S.error;
+  }
+  $("connIco").textContent = ico; $("connIco").className = "ico " + cls;
+  $("connText").textContent = text;
+  $("conn").title = text;
+  if (!$("connInfo").hidden) renderConnInfo();
+
+  const nb = $("nodebar"); clear(nb);
+  if (!S.node) { nb.appendChild(el("span", "muted", "No board connected yet.")); return; }
+  assignColors();
+  const nm = el("span", "name"); nm.appendChild(spot(S.node.id)); nm.appendChild(document.createTextNode(S.node.long || S.node.id)); nb.appendChild(nm);
+  nb.appendChild(el("span", "sec", S.node.id + " · " + (S.node.hw || "") + (S.node.fw ? " · firmware " + S.node.fw : "")));
+  if (S.config) nb.appendChild(el("span", "sec", S.config.region + " · " + S.config.preset));
+  const b = el("span", "badge", S.mode.label || "Unknown");
+  nb.appendChild(el("span", "sec", "Mode:")); nb.appendChild(b);
+}
+
+/* ---------- modes ---------- */
+function buildModes() {
+  const box = $("modes"); clear(box);
+  S.modes.forEach((m) => {
+    const b = el("button", "mode"); b.type = "button"; b.dataset.id = m.id;
+    const t = el("div", "t"); t.appendChild(el("span", "", m.label)); t.appendChild(el("span", "ok", "")); t.lastChild.dataset.cur = "1"; t.lastChild.style.whiteSpace = "nowrap"; t.lastChild.style.fontWeight = "600";
+    b.appendChild(t); b.appendChild(el("div", "s", m.summary));
+    b.addEventListener("click", () => { pending = m.id; renderModes(); });
+    box.appendChild(b);
+  });
+  modesBuilt = true;
+}
+function renderModes() {
+  if (!modesBuilt) buildModes();
+  const busy = ["applying", "waiting"].includes(S.switch.state);
+  document.querySelectorAll("#modes .mode").forEach((b) => {
+    const id = b.dataset.id;
+    b.classList.toggle("current", S.mode.current === id);
+    b.classList.toggle("pending", pending === id && S.mode.current !== id);
+    b.disabled = busy || !S.connected;
+    b.setAttribute("aria-pressed", S.mode.current === id ? "true" : "false");
+    b.querySelector("[data-cur]").textContent = S.mode.current === id ? "✓ Active" : "";
+  });
+  const conf = $("confirm");
+  const m = S.modes.find((x) => x.id === pending);
+  if (m && S.mode.current !== pending && !busy) {
+    conf.classList.add("on");
+    $("confirmText").textContent = "Switch to “" + m.label + "”? " + m.note + " The board will restart, which takes about 30 to 60 seconds.";
+    $("intervalWrap").hidden = !m.pax;
+    $("tokenWrap").hidden = !S.auth_required;
+  } else {
+    conf.classList.remove("on");
+    if (S.mode.current === pending) pending = null;
+  }
+  $("apply").disabled = busy;
+  const sm = $("switchmsg");
+  if (S.switch.state === "idle") { sm.classList.remove("on"); }
+  else {
+    sm.classList.add("on"); clear(sm);
+    const map = { applying: ["↻", "warnc"], waiting: ["↻", "warnc"], done: ["✓", "ok"], failed: ["✕", "bad"] };
+    const [i, c] = map[S.switch.state] || ["•", ""];
+    sm.appendChild(el("span", "ico " + c, i));
+    const target = S.modes.find((x) => x.id === S.switch.mode);
+    sm.appendChild(document.createTextNode(" " + (target ? target.label + ": " : "") + S.switch.message));
+  }
+}
+$("cancel").addEventListener("click", () => { pending = null; renderModes(); });
+$("apply").addEventListener("click", async () => {
+  if (!pending) return;
+  const headers = { "Content-Type": "application/json" };
+  if (S.auth_required) {
+    const tok = $("token").value;
+    headers["X-Panel-Token"] = tok;
+    try { sessionStorage.setItem("panelToken", tok); } catch (e) {}
+  }
+  $("apply").disabled = true;
+  try {
+    const r = await fetch("/api/mode", { method: "POST", headers, body: JSON.stringify({ mode: pending, pax_interval: Number($("interval").value) || 60 }) });
+    const j = await r.json();
+    if (!j.ok) { showBanner(j.message || "Could not start the mode change."); $("apply").disabled = false; return; }
+    pending = null; hideBanner();
+  } catch (e) { showBanner("Could not reach the panel server."); }
+  poll();
+});
+try { const t = sessionStorage.getItem("panelToken"); if (t) $("token").value = t; } catch (e) {}
+
+/* ---------- banner ---------- */
+function showBanner(msg) { const b = $("banner"); b.textContent = msg; b.classList.add("on"); }
+function hideBanner() { $("banner").classList.remove("on"); }
+
+/* ---------- pax hero + chart ---------- */
+const SERIES = [
+  { key: 1, name: "WiFi devices", css: "var(--s1)" },
+  { key: 2, name: "Bluetooth devices", css: "var(--s2)" },
+];
+function paxPoints() {
+  const all = S.pax.history;
+  if (!rangeSec) return all;
+  const tmin = S.now - rangeSec;
+  return all.filter((p) => p[0] >= tmin);
+}
+function renderHero() {
+  const all = S.pax.history;
+  const cfgPax = S.config && S.config.paxcounter;
+  if (!all.length) {
+    $("hero").textContent = "–";
+    $("heroSub").textContent = cfgPax ? "Waiting for the first reading" : "Paxcounter is off in the current mode";
+    return;
+  }
+  const last = all[all.length - 1];
+  $("hero").textContent = String(last[1] + last[2]);
+  $("heroSub").textContent = "WiFi " + last[1] + " · Bluetooth " + last[2] + " · " + ago(last[0]) + (cfgPax ? "" : " (Paxcounter is off now)");
+}
+function renderLegend() {
+  const lg = $("legend"); if (lg.childNodes.length) return;
+  SERIES.forEach((s) => {
+    const item = el("span"); const k = el("span", "key"); k.style.borderTopColor = s.css;
+    item.appendChild(k); item.appendChild(document.createTextNode(s.name)); lg.appendChild(item);
+  });
+}
+function niceStep(raw) {
+  if (raw <= 1) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(raw)));
+  for (const k of [1, 2, 2.5, 5, 10]) if (k * p >= raw) return k * p;
+  return 10 * p;
+}
+function drawChart() {
+  const svg = $("chart"); clear(svg);
+  const W = $("chartbox").clientWidth || 600, H = 240;
+  const m = { l: 34, r: 34, t: 12, b: 24 };
+  svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+  const pts = paxPoints();
+  if (!pts.length) {
+    const t = sv("text", { x: W / 2, y: H / 2, "text-anchor": "middle" });
+    t.textContent = (S.config && S.config.paxcounter) ? "No readings in this time range yet" : "Switch to a Paxcounter mode to start counting";
+    svg.appendChild(t); return;
+  }
+  const tmax = S.now, tmin = rangeSec ? S.now - rangeSec : Math.min(pts[0][0], S.now - 60);
+  const x = (t) => m.l + (W - m.l - m.r) * ((t - tmin) / Math.max(1, tmax - tmin));
+  const peak = Math.max(1, ...pts.map((p) => Math.max(p[1], p[2])));
+  const step = niceStep(peak / 4), ymax = step * 4;
+  const y = (v) => m.t + (H - m.t - m.b) * (1 - v / ymax);
+  for (let i = 0; i <= 4; i++) {            // hairline grid + y ticks
+    const v = i * step, yy = y(v);
+    svg.appendChild(sv("line", { x1: m.l, x2: W - m.r, y1: yy, y2: yy, stroke: i === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }));
+    const t = sv("text", { x: m.l - 6, y: yy + 4, "text-anchor": "end" }); t.textContent = v.toLocaleString(); svg.appendChild(t);
+  }
+  for (let i = 0; i <= 3; i++) {            // x ticks
+    const tt = tmin + (tmax - tmin) * (i / 3);
+    const t = sv("text", { x: x(tt), y: H - 6, "text-anchor": i === 0 ? "start" : i === 3 ? "end" : "middle" });
+    t.textContent = new Date(tt * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); svg.appendChild(t);
+  }
+  SERIES.forEach((s) => {                   // lines, 2px, round
+    const d = pts.map((p, i) => (i ? "L" : "M") + x(p[0]).toFixed(1) + " " + y(p[s.key]).toFixed(1)).join(" ");
+    svg.appendChild(sv("path", { d, fill: "none", stroke: s.css, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+  });
+  const last = pts[pts.length - 1];         // end dots with a surface ring + end labels
+  const ends = SERIES.map((s) => ({ s, yy: y(last[s.key]), v: last[s.key] })).sort((a, b) => a.yy - b.yy);
+  if (ends.length === 2 && Math.abs(ends[0].yy - ends[1].yy) < 14) { ends[0].off = -6; ends[1].off = 6; }
+  ends.forEach((e) => {
+    svg.appendChild(sv("circle", { cx: x(last[0]), cy: e.yy, r: 4, fill: e.s.css, stroke: "var(--surface)", "stroke-width": 2 }));
+    const t = sv("text", { x: x(last[0]) + 9, y: e.yy + 4 + (e.off || 0), class: "endlab" }); t.textContent = String(e.v); svg.appendChild(t);
+  });
+  // hover layer
+  const cross = sv("g", { id: "cross", visibility: "hidden" });
+  cross.appendChild(sv("line", { id: "crossLine", y1: m.t, y2: H - m.b, stroke: "var(--axis)", "stroke-width": 1 }));
+  SERIES.forEach((s, i) => cross.appendChild(sv("circle", { id: "crossDot" + i, r: 4, fill: s.css, stroke: "var(--surface)", "stroke-width": 2 })));
+  svg.appendChild(cross);
+  const overlay = sv("rect", { x: m.l, y: 0, width: W - m.l - m.r, height: H, fill: "transparent", tabindex: 0 });
+  overlay.setAttribute("aria-label", "Chart readings. Use left and right arrow keys.");
+  svg.appendChild(overlay);
+  const show = (idx) => {
+    hoverIdx = idx; const p = pts[idx]; if (!p) return;
+    cross.setAttribute("visibility", "visible");
+    const xx = x(p[0]); const line = $("crossLine"); line.setAttribute("x1", xx); line.setAttribute("x2", xx);
+    SERIES.forEach((s, i) => { const c = $("crossDot" + i); c.setAttribute("cx", xx); c.setAttribute("cy", y(p[s.key])); });
+    const tip = $("tip"); clear(tip);
+    tip.appendChild(el("div", "time", clock(p[0])));
+    SERIES.forEach((s) => {
+      const r = el("div", "r"); const k = el("span", "key"); k.style.borderTopColor = s.css;
+      r.appendChild(k); r.appendChild(el("span", "v", String(p[s.key]))); r.appendChild(el("span", "l", s.name)); tip.appendChild(r);
+    });
+    const r = el("div", "r"); r.appendChild(el("span", "v", String(p[1] + p[2]))); r.appendChild(el("span", "l", "total")); tip.appendChild(r);
+    tip.style.display = "block";
+    const w = tip.offsetWidth; tip.style.left = Math.max(0, Math.min(W - w, xx + 12 + w > W ? xx - w - 12 : xx + 12)) + "px"; tip.style.top = "8px";
+  };
+  const hide = () => { cross.setAttribute("visibility", "hidden"); $("tip").style.display = "none"; hoverIdx = null; };
+  overlay.addEventListener("pointermove", (ev) => {
+    const rect = svg.getBoundingClientRect(); const px = (ev.clientX - rect.left) * (W / rect.width);
+    let best = 0, bd = Infinity; pts.forEach((p, i) => { const d = Math.abs(x(p[0]) - px); if (d < bd) { bd = d; best = i; } });
+    show(best);
+  });
+  overlay.addEventListener("pointerleave", hide);
+  overlay.addEventListener("blur", hide);
+  overlay.addEventListener("keydown", (ev) => {
+    if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+    ev.preventDefault();
+    const cur = hoverIdx == null ? pts.length - 1 : hoverIdx;
+    show(Math.max(0, Math.min(pts.length - 1, cur + (ev.key === "ArrowLeft" ? -1 : 1))));
+  });
+}
+function renderTable() {
+  const w = $("tableWrap"); w.hidden = !tableOpen; $("tableBtn").textContent = tableOpen ? "Hide table" : "Show table";
+  $("tableBtn").setAttribute("aria-expanded", String(tableOpen));
+  if (!tableOpen) return; clear(w);
+  const t = el("table"); const h = el("tr");
+  ["Time", "WiFi", "Bluetooth", "Total"].forEach((c, i) => { const th = el("th", i ? "num" : "", c); h.appendChild(th); }); t.appendChild(h);
+  paxPoints().slice(-40).reverse().forEach((p) => {
+    const r = el("tr"); r.appendChild(el("td", "", clock(p[0])));
+    [p[1], p[2], p[1] + p[2]].forEach((v) => r.appendChild(el("td", "num", String(v)))); t.appendChild(r);
+  });
+  w.appendChild(t);
+}
+$("tableBtn").addEventListener("click", () => { tableOpen = !tableOpen; renderTable(); });
+document.querySelectorAll("#range button").forEach((b) => b.addEventListener("click", () => {
+  rangeSec = Number(b.dataset.r);
+  document.querySelectorAll("#range button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  if (S) { drawChart(); renderTable(); }
+}));
+window.addEventListener("resize", () => { if (S) drawChart(); });
+
+/* ---------- node status tiles ---------- */
+function renderTiles() {
+  const box = $("tiles"); clear(box);
+  const n = S.node || {}, c = S.config;
+  const mqttText = !c ? "–" : !c.mqtt ? "Off" : c.mqtt_proxy ? "Via USB" : "Direct";
+  const batt = n.battery == null ? "–" : n.battery > 100 ? "Plugged in" : n.battery + "%";
+  const items = [
+    ["Uptime", dur(n.uptime)], ["Battery", batt],
+    ["Channel busy", pct(n.chan_util)], ["Airtime used to send", pct(n.air_tx)],
+    ["WiFi", c ? onoff(c.wifi) : "–"], ["Bluetooth", c ? onoff(c.bluetooth) : "–"],
+    ["MQTT", mqttText], ["Paxcounter", c ? onoff(c.paxcounter) : "–"],
+    ["Channel uplink", c ? onoff(c.uplink) : "–"], ["Map reporting", c ? onoff(c.map_reporting) : "–"],
+  ];
+  const icons = {
+    "Battery": () => icoBattery(n.battery),
+    "Channel busy": () => icoGauge(n.chan_util, 50, "Channel busy", "How much of the time the radio hears traffic. Above 25% the mesh is getting crowded."),
+    "Airtime used to send": () => icoGauge(n.air_tx, 10, "Airtime used to send", "Share of the last hour this board spent transmitting."),
+  };
+  items.forEach(([k, v]) => {
+    const t = el("div", "tile"); t.appendChild(el("div", "k", k));
+    const vv = el("div", "v");
+    if (icons[k] && S.node) vv.appendChild(icons[k]()); else vv.textContent = v;
+    t.appendChild(vv); box.appendChild(t);
+  });
+}
+
+/* ---------- packets, broker ---------- */
+const tipEl = $("tip");
+function renderPackets() {
+  const P = S.packets;
+  $("heard").textContent = P.total + " packets · from this node: " + P.own + " · from other nodes: " + P.others;
+  const bars = $("bars"); clear(bars);
+  const entries = Object.entries(P.by_port).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const max = Math.max(1, ...entries.map((e) => e[1]));
+  if (!entries.length) bars.appendChild(el("div", "muted", "Nothing seen yet."));
+  entries.forEach(([port, n]) => {
+    bars.appendChild(el("div", "lab", prettyPort(port)));
+    const tr = el("div", "bartrack"); const b = el("div", "bar"); b.style.width = (n / max * 80) + "%";
+    tr.appendChild(b); tr.appendChild(el("span", "val", String(n))); tr.title = prettyPort(port) + ": " + n;
+    bars.appendChild(tr);
+  });
+  // broker confirmation: always icon + label, never color alone
+  const st = $("brokerStatus"); clear(st);
+  const br = S.broker, c = S.config;
+  let ico = "–", cls = "muted", head = "", detail = "";
+  if (!c) { head = "No board connected"; }
+  else if (!c.mqtt) { head = "MQTT is off in this mode"; detail = "Nothing is being uploaded to the public server."; }
+  else if (br.last_ts && S.now - br.last_ts < 600) {
+    ico = "✓"; cls = "ok"; head = "Uplink confirmed" + (br.simulated ? " (simulated)" : "");
+    detail = "Last message from this node reached the public server " + ago(br.last_ts) + " (" + br.count + " since the panel started).";
+  } else if (!br.connected) {
+    ico = "!"; cls = "warnc"; head = "Can't check the uplink"; detail = br.error || "This computer can't reach the public MQTT server, so the panel can't confirm uploads.";
+  } else {
+    ico = "!"; cls = "warnc"; head = "No upload seen yet";
+    detail = "No message from this node has reached the public server yet. Check the node's WiFi connection (2.4 GHz only) and wait a few minutes.";
+  }
+  if (c && c.mqtt && c.mqtt_proxy) detail += " Forwarded through this computer: " + br.forwarded + " messages.";
+  st.appendChild(el("span", "ico " + cls, ico));
+  const d = el("div"); d.appendChild(el("div", "", head)); d.lastChild.style.fontWeight = "600"; d.appendChild(el("div", "sec", detail)); st.appendChild(d);
+  if (S.connected && P.total > 0 && P.others === 0) {
+    const s2 = el("div", "status"); s2.appendChild(el("span", "ico warnc", "!"));
+    const d2 = el("div"); d2.appendChild(el("div", "", "Hearing no other nodes")); d2.lastChild.style.fontWeight = "600";
+    d2.appendChild(el("div", "sec", "Every packet so far came from this node. If other boards are nearby, check that region, preset, channel key and antenna match."));
+    s2.appendChild(d2); st.parentNode.appendChild(s2);
+    st.dataset.extra = "1";
+  }
+}
+function cleanExtra() {   // remove the extra status row added on the previous render
+  const card = $("brokerStatus").parentNode;
+  card.querySelectorAll(".status").forEach((n) => { if (n.id !== "brokerStatus") n.remove(); });
+}
+
+/* ---------- node colours ---------- */
+const nodeSlots = {};
+let nextSlot = 0;
+function nodeColor(id) {
+  if (!id) return "var(--muted)";
+  if (!(id in nodeSlots)) nodeSlots[id] = (nextSlot++) % 8 + 1;
+  return "var(--n" + nodeSlots[id] + ")";
+}
+function assignColors() {             // this board first, then others in a stable order
+  if (!S) return;
+  const me = S.nodes.find((n) => n.is_me); if (me) nodeColor(me.id);
+  [...S.nodes].filter((n) => !n.is_me).sort((a, b) => (a.id || "").localeCompare(b.id || "")).forEach((n) => nodeColor(n.id));
+}
+function spot(id) { const sp = el("span", "spot"); sp.style.background = nodeColor(id); sp.setAttribute("aria-hidden", "true"); return sp; }
+
+/* ---------- small indicator icons (monochrome; lit parts full, unlit faint) ---------- */
+const OFF = 0.22;
+function indWrap(svg, value, title) {
+  const w = el("span", "ind"); w.title = title; w.setAttribute("aria-label", title);
+  w.appendChild(svg); if (value !== undefined && value !== null) w.appendChild(el("span", "v", value)); return w;
+}
+function svgBox(wd, ht) { return sv("svg", { width: wd, height: ht, viewBox: "0 0 " + wd + " " + ht, "aria-hidden": "true" }); }
+function icoSnr(snr) {               // four rising bars
+  const lit = snr == null ? 0 : snr >= 5 ? 4 : snr >= 0 ? 3 : snr >= -7 ? 2 : snr >= -15 ? 1 : 0;
+  const s = svgBox(14, 12);
+  for (let i = 0; i < 4; i++) { const h = 3 + i * 3; s.appendChild(sv("rect", { x: i * 3.6, y: 12 - h, width: 2.4, height: h, rx: 0.8, fill: "currentColor", "fill-opacity": i < lit ? 1 : OFF })); }
+  const q = ["too weak", "weak", "fair", "good", "excellent"][lit];
+  return indWrap(s, snr == null ? "–" : snr + " dB", "SNR " + (snr == null ? "unknown" : snr + " dB (" + q + ")") + ". Above 0 dB is comfortable for LongFast; it still works down to about −17 dB.");
+}
+function icoRssi(rssi) {              // radiating arcs
+  const lit = rssi == null ? 0 : rssi >= -75 ? 3 : rssi >= -95 ? 2 : rssi >= -115 ? 1 : 0;
+  const s = svgBox(14, 12);
+  s.appendChild(sv("circle", { cx: 7, cy: 10.5, r: 1.4, fill: "currentColor", "fill-opacity": rssi == null ? OFF : 1 }));
+  [3.5, 6.5, 9.5].forEach((r, i) => s.appendChild(sv("path", { d: `M${7 - r * 0.8} ${10.5 - r * 0.6} A ${r} ${r} 0 0 1 ${7 + r * 0.8} ${10.5 - r * 0.6}`, fill: "none", stroke: "currentColor", "stroke-width": 1.4, "stroke-linecap": "round", "stroke-opacity": i < lit ? 1 : OFF })));
+  return indWrap(s, rssi == null ? "–" : rssi + " dBm", "Received strength " + (rssi == null ? "unknown" : rssi + " dBm") + ". Closer to 0 is stronger; −120 dBm is near the limit.");
+}
+function icoHops(h) {                 // a chain: sender … this node
+  const s = svgBox(22, 10), n = h == null ? 0 : Math.min(h, 3);
+  const pts = [2]; for (let i = 1; i <= n; i++) pts.push(2 + i * (18 / (n + 1)));
+  pts.push(20);
+  s.appendChild(sv("line", { x1: 2, y1: 5, x2: 20, y2: 5, stroke: "currentColor", "stroke-width": 1.2, "stroke-opacity": h == null ? OFF : 0.6 }));
+  pts.forEach((x, i) => s.appendChild(sv("circle", { cx: x, cy: 5, r: i === 0 || i === pts.length - 1 ? 2.4 : 1.8, fill: i === pts.length - 1 ? "var(--surface)" : "currentColor", stroke: "currentColor", "stroke-width": 1.2, "fill-opacity": h == null ? OFF : 1 })));
+  const txt = h == null ? "–" : h === 0 ? "direct" : h + (h > 3 ? "+" : "");
+  return indWrap(s, txt, h == null ? "Hops unknown" : h === 0 ? "Heard directly, no relays" : "Relayed through " + h + " other node" + (h === 1 ? "" : "s"));
+}
+function icoBattery(level) {
+  const s = svgBox(20, 11);
+  s.appendChild(sv("rect", { x: 0.7, y: 0.7, width: 16, height: 9.6, rx: 2, fill: "none", stroke: "currentColor", "stroke-width": 1.2, "stroke-opacity": level == null ? OFF : 1 }));
+  s.appendChild(sv("rect", { x: 17.6, y: 3.5, width: 1.8, height: 4, rx: 0.6, fill: "currentColor", "fill-opacity": level == null ? OFF : 1 }));
+  if (level != null && level > 100) {
+    s.appendChild(sv("path", { d: "M9.6 1.8 L5.6 6 H8.4 L7.4 9.2 L11.4 5 H8.6 Z", fill: "currentColor" }));
+    return indWrap(s, "USB", "Powered over USB (no battery reading)");
+  }
+  if (level != null) {
+    const w = Math.max(0.8, 13.2 * Math.min(level, 100) / 100);
+    s.appendChild(sv("rect", { x: 2.1, y: 2.1, width: w, height: 6.8, rx: 1, fill: level <= 15 ? "var(--crit)" : "currentColor" }));
+  }
+  return indWrap(s, level == null ? "–" : level + "%", "Battery " + (level == null ? "unknown" : level + "%"));
+}
+function icoAge(ts) {                 // ring that empties over 15 minutes
+  const s = svgBox(12, 12), age = ts ? Math.max(0, S.now - ts) : null;
+  const C = 2 * Math.PI * 4.6, frac = age == null ? 0 : Math.max(0, 1 - age / 900);
+  s.appendChild(sv("circle", { cx: 6, cy: 6, r: 4.6, fill: "none", stroke: "currentColor", "stroke-width": 1.6, "stroke-opacity": OFF }));
+  if (frac > 0) {
+    const a = sv("circle", { cx: 6, cy: 6, r: 4.6, fill: "none", stroke: "currentColor", "stroke-width": 1.6, "stroke-linecap": "round", "stroke-dasharray": C, "stroke-dashoffset": C * (1 - frac), transform: "rotate(-90 6 6)" });
+    s.appendChild(a);
+  }
+  if (age != null && age < 10) s.appendChild(sv("circle", { cx: 6, cy: 6, r: 1.6, fill: "var(--led-on)" }));
+  return indWrap(s, ts ? ago(ts) : "–", ts ? "Last heard " + clock(ts) + ". The ring empties over 15 minutes." : "Not heard since the panel started");
+}
+function icoGauge(pctv, full, label, note) {   // half-dial, fills to `full` percent
+  const s = svgBox(18, 11), f = pctv == null ? 0 : Math.min(1, pctv / full);
+  const arc = (t) => { const a = Math.PI * (1 - t); return [9 + 7.5 * Math.cos(a), 9.5 - 7.5 * Math.sin(a)]; };
+  const [x1, y1] = arc(0), [x2, y2] = arc(1), [xf, yf] = arc(f);
+  s.appendChild(sv("path", { d: `M${x1} ${y1} A 7.5 7.5 0 0 1 ${x2} ${y2}`, fill: "none", stroke: "currentColor", "stroke-width": 2, "stroke-linecap": "round", "stroke-opacity": OFF }));
+  if (f > 0.01) s.appendChild(sv("path", { d: `M${x1} ${y1} A 7.5 7.5 0 0 1 ${xf} ${yf}`, fill: "none", stroke: f > 0.8 ? "#b87c00" : "currentColor", "stroke-width": 2, "stroke-linecap": "round" }));
+  return indWrap(s, pct(pctv), label + " " + pct(pctv) + ". " + note);
+}
+function icoPax(total, wifi, ble) {   // three people, lit by how busy it is
+  const s = svgBox(20, 12), lit = total == null ? 0 : total === 0 ? 0 : total <= 3 ? 1 : total <= 10 ? 2 : 3;
+  [3.5, 10, 16.5].forEach((x, i) => {
+    const o = i < lit ? 1 : OFF;
+    s.appendChild(sv("circle", { cx: x, cy: 3.2, r: 2.1, fill: "currentColor", "fill-opacity": o }));
+    s.appendChild(sv("path", { d: `M${x - 3} 11.5 a3 3.2 0 0 1 6 0 Z`, fill: "currentColor", "fill-opacity": o }));
+  });
+  return indWrap(s, total == null ? "–" : String(total), total == null ? "No Paxcounter report" : total + " devices nearby (" + wifi + " WiFi, " + ble + " Bluetooth)");
+}
+
+/* ---------- nodes table, events ---------- */
+function renderNodes() {
+  assignColors();
+  const t = $("nodes"); clear(t);
+  const cols = ["Name", "Last heard", "Packets", "Last packet", "Signal", "Hops", "Paxcounter", "Battery"];
+  const h = el("tr"); cols.forEach((c, i) => h.appendChild(el("th", i ? "num" : "", c))); t.appendChild(h);
+  const list = [...S.nodes].sort((a, b) => (b.is_me - a.is_me) || ((b.last_heard || 0) - (a.last_heard || 0)));
+  if (!list.length) { const r = el("tr"); const td = el("td", "muted", "No nodes yet."); td.colSpan = cols.length; r.appendChild(td); t.appendChild(r); }
+  list.forEach((n) => {
+    const lv = n.live, r = el("tr");
+    const name = el("td"); name.appendChild(spot(n.id)); name.appendChild(document.createTextNode(n.long || n.short || n.id || "unknown"));
+    name.appendChild(el("div", "muted", (n.id || "") + (n.is_me ? " · this node" : "") + (!n.long && !n.is_me ? " · name not received yet" : "")));
+    name.lastChild.style.marginLeft = "15px";
+    r.appendChild(name);
+    const lh = el("td", "num");
+    if (n.is_me) lh.textContent = "this board";
+    else if (lv) lh.appendChild(icoAge(lv.last));
+    else { lh.textContent = "not since panel start"; lh.className = "num muted"; lh.title = "Panel started " + ago(S.panel_started) + ". The board's own record is not shown because it has no reliable clock."; }
+    r.appendChild(lh);
+    r.appendChild(el("td", "num", lv ? String(lv.count) : "–"));
+    const lp = el("td", "num", lv ? prettyPort(lv.port) : "–");
+    if (lv) lp.title = Object.entries(lv.ports).map(([k, v]) => prettyPort(k) + ": " + v).join(", ");
+    r.appendChild(lp);
+    const sg = el("td", "num");
+    if (n.is_me) sg.textContent = "–"; else { sg.appendChild(icoSnr(n.snr)); sg.appendChild(icoRssi(lv ? lv.rssi : null)); }
+    r.appendChild(sg);
+    const hp = el("td", "num"); if (n.is_me) hp.textContent = "–"; else hp.appendChild(icoHops(n.hops)); r.appendChild(hp);
+    const px = lv && lv.pax, pc = el("td", "num");
+    if (px) { pc.appendChild(icoPax(px.wifi + px.ble, px.wifi, px.ble)); pc.appendChild(el("span", "muted", " · " + ago(px.ts))); } else pc.textContent = "–";
+    r.appendChild(pc);
+    const bt = el("td", "num"); bt.appendChild(icoBattery(n.battery)); r.appendChild(bt);
+    t.appendChild(r);
+  });
+}
+function renderEvents() {
+  const box = $("events"); clear(box);
+  if (!S.events.length) box.appendChild(el("div", "muted", "No events yet."));
+  S.events.forEach((e) => { const d = el("div"); d.appendChild(el("span", "muted", clock(e.ts) + "  ")); d.appendChild(document.createTextNode(e.msg)); box.appendChild(d); });
+}
+
+/* ---------- live flow diagram ---------- */
+const DEV_IMG = {
+  HELTEC_V3: "heltec-v3", HELTEC_V2_1: "heltec-v2.1", SEEED_XIAO_S3: "seeed-xiao-s3",
+  RAK4631: "rak4631", RAK11200: "rak11200", T_ECHO: "t-echo", T_DECK: "t-deck",
+  TBEAM: "tbeam", TBEAM_S3_CORE: "tbeam-s3-core", TLORA_V2_1_1P6: "tlora-v2-1-1_6",
+  TLORA_T3_S3: "tlora-t3s3-v1", TRACKER_T1000_E: "tracker-t1000-e", NANO_G2_ULTRA: "nano-g2-ultra",
+  STATION_G2: "station-g2", HELTEC_WIRELESS_TRACKER: "heltec-wireless-tracker",
+  HELTEC_WIRELESS_PAPER: "heltec-wireless-paper", HELTEC_MESH_NODE_T114: "heltec-mesh-node-t114",
+  HELTEC_VISION_MASTER_T190: "heltec-vision-master-t190", SENSECAP_INDICATOR: "seeed-sensecap-indicator",
+  WIO_WM1110: "wio-tracker-wm1110", T_WATCH_S3: "t-watch-s3"
+};
+const imgState = {};            // file -> "local" | "remote" | "none" | "probing"
+let flowSig = "", flowRefs = {}, lastTotal = null, flowLive = [];
+const REMOTE = "https://flasher.meshtastic.org/img/devices/";
+function probe(file) {
+  if (imgState[file]) return;
+  imgState[file] = "probing";
+  const tryUrl = (url, ok, fail) => { const im = new Image(); im.onload = ok; im.onerror = fail; im.src = url; };
+  tryUrl("devices/" + file + ".svg", () => { imgState[file] = "local"; }, () =>
+    tryUrl(REMOTE + file + ".svg", () => { imgState[file] = "remote"; }, () => { imgState[file] = "none"; }));
+}
+function shapeKind(hw) {
+  const h = (hw || "").toUpperCase();
+  if (!h || h === "UNSET") return "unknown";
+  if (/TRACKER|T1000|WATCH|WM1110|CARD/.test(h)) return "tracker";
+  if (/ECHO|PAPER|DECK|NANO|STATION|VISION|PORTABLE|PAGER/.test(h)) return "handheld";
+  return "board";
+}
+function drawShape(g, kind, x, y, s) {   // fallback node shape inside an s×s tile at x,y
+  const c = (tag, a) => { a.class = "shape"; g.appendChild(sv(tag, a)); };
+  const cx = x + s / 2, cy = y + s / 2;
+  if (kind === "board") {
+    c("rect", { x: x + s * .16, y: y + s * .3, width: s * .68, height: s * .5, rx: 4 });
+    c("rect", { x: x + s * .4, y: y + s * .42, width: s * .2, height: s * .2, rx: 2 });
+    c("path", { d: `M${x + s * .78} ${y + s * .3} L${x + s * .78} ${y + s * .1}` });
+  } else if (kind === "handheld") {
+    c("rect", { x: x + s * .27, y: y + s * .1, width: s * .46, height: s * .8, rx: 5 });
+    c("rect", { x: x + s * .34, y: y + s * .19, width: s * .32, height: s * .26, rx: 2 });
+    c("circle", { cx, cy: y + s * .7, r: s * .07 });
+  } else if (kind === "tracker") {
+    c("rect", { x: x + s * .27, y: y + s * .27, width: s * .46, height: s * .46, rx: s * .12 });
+    c("path", { d: `M${cx - s * .08} ${y + s * .27} a${s * .08} ${s * .08} 0 0 1 ${s * .16} 0` });
+    c("circle", { cx, cy, r: s * .06 });
+  } else {                                // unknown: a plain node with signal arcs
+    c("circle", { cx, cy, r: s * .1 });
+    [.2, .32].forEach((r) => c("path", { d: `M${cx - s * r} ${cy - s * r * .6} A${s * r * 1.2} ${s * r * 1.2} 0 0 0 ${cx - s * r} ${cy + s * r * .6}` }));
+    [.2, .32].forEach((r) => c("path", { d: `M${cx + s * r} ${cy - s * r * .6} A${s * r * 1.2} ${s * r * 1.2} 0 0 1 ${cx + s * r} ${cy + s * r * .6}` }));
+  }
+}
+function deviceIcon(g, hw, x, y, s, isMe) {
+  g.appendChild(sv("rect", { class: "tile", x, y, width: s, height: s, rx: 10 }));
+  const file = DEV_IMG[(hw || "").toUpperCase()];
+  if (file) probe(file);
+  const st = file ? imgState[file] : "none";
+  if (st === "local" || st === "remote") {
+    g.appendChild(sv("image", { href: (st === "local" ? "devices/" : REMOTE) + file + ".svg",
+      x: x + 4, y: y + 4, width: s - 8, height: s - 8, preserveAspectRatio: "xMidYMid meet" }));
+  } else drawShape(g, shapeKind(hw), x, y, s);
+  if (isMe) g.appendChild(sv("rect", { class: "me", x: x - 3, y: y - 3, width: s + 6, height: s + 6, rx: 12 }));
+}
+function addText(g, cls, x, y, txt, anchor) {
+  const t = sv("text", { x, y }); if (cls) t.setAttribute("class", cls); if (anchor) t.setAttribute("text-anchor", anchor);
+  t.textContent = txt; g.appendChild(t); return t;
+}
+function flowOutputs() {
+  const c = S.config || {}, b = S.broker || {};
+  const mapDirect = c.mqtt && c.uplink && c.wifi && !c.mqtt_proxy;
+  const out = [];
+  out.push({ key: "lora", label: "LoRa mesh", sub: "radio to other nodes", on: S.connected, dur: 6 });
+  out.push({ key: "map", label: c.mqtt_proxy ? "Public MQTT via this computer" : "Map uplink (WiFi + MQTT)",
+    sub: !(mapDirect || (c.mqtt && c.mqtt_proxy)) ? "off in this mode" : (b.count ? b.count + " seen by the server" : "waiting for the server"),
+    on: !!(mapDirect || (c.mqtt && c.mqtt_proxy)), dur: b.count ? 3 : 6 });
+  out.push({ key: "pax", label: "Paxcounter report", sub: c.paxcounter ? "every " + c.pax_interval + " s" : "off in this mode",
+    on: !!c.paxcounter, dur: 4 });
+  out.push({ key: "usb", label: "This computer (USB)", sub: S.connected ? "this panel" : "not connected", on: S.connected, dur: 2.5 });
+  return out;
+}
+function renderFlow() {
+  assignColors();
+  const box = $("flow");
+  const others = S.nodes.filter((n) => !n.is_me).sort((a, b) => (b.last_heard || 0) - (a.last_heard || 0));
+  const left = others.slice(0, 5), more = others.length - left.length;
+  const outs = flowOutputs();
+  const rows = Math.max(left.length, outs.length, 1), ROW = 86, H = rows * ROW + 40;
+  const live = (n) => n.last_heard && (S.now - n.last_heard) < 300;
+  const me = S.node || {};
+  const sig = JSON.stringify([left.map((n) => [n.id, n.hw, live(n), (S.now - (n.last_heard || 0)) < 60]),
+    more, outs.map((o) => [o.key, o.on, o.dur]), me.hw, S.connected, left.map((n) => imgState[DEV_IMG[(n.hw || "").toUpperCase()]]),
+    imgState[DEV_IMG[(me.hw || "").toUpperCase()]]]);
+  if (sig === flowSig) {            // only refresh text, so the dots keep moving
+    left.forEach((n) => { const r = flowRefs["n" + n.id]; if (r) r.textContent = (n.snr == null ? "–" : n.snr + " dB") + " · " + (n.hops == null ? "?" : n.hops + " hop" + (n.hops === 1 ? "" : "s")) + " · " + (n.last_heard ? ago(n.last_heard) : "never"); });
+    outs.forEach((o) => { const r = flowRefs["o" + o.key]; if (r) r.textContent = o.sub; });
+    return;
+  }
+  flowSig = sig; flowRefs = {}; flowLive = []; clear(box);
+  const svg = sv("svg", { viewBox: "0 0 1000 " + H, role: "img", "aria-label": "Nodes heard on the left, this board in the middle, where its data goes on the right" });
+  const g = sv("g", {}); svg.appendChild(g);
+  const dots = sv("g", { id: "flowdots" });
+  const midY = H / 2, cx = 500, bs = 120;
+  addText(g, "cap", 30, 22, "Heard by this node");
+  addText(g, "cap", 970, 22, "Leaves this node", "end");
+  const wire = (d, idle) => { g.appendChild(sv("path", { d, class: "wire" + (idle ? " idle" : "") })); };
+  const dot = (d, dur, delay, out, color) => {
+    const e = sv("circle", { r: 4, class: "dot" + (out ? " out" : "") });
+    if (color) e.style.fill = color;
+    e.style.offsetPath = "path('" + d + "')"; e.style.animationDuration = dur + "s"; e.style.animationDelay = (-delay) + "s";
+    dots.appendChild(e);
+  };
+  const y0 = (H - left.length * ROW) / 2 + ROW / 2;
+  left.forEach((n, i) => {
+    const y = y0 + i * ROW, isLive = live(n), recent = (S.now - (n.last_heard || 0)) < 60;
+    deviceIcon(g, n.hw, 30, y - 32, 64, false);
+    g.appendChild(sv("circle", { cx: 113, cy: y - 10.5, r: 4.5, fill: nodeColor(n.id) }));
+    addText(g, "", 124, y - 6, n.long || n.short || n.id || "unknown");
+    flowRefs["n" + n.id] = addText(g, "sub", 124, y + 12, "");
+    const d = `M300 ${y} C 380 ${y} 370 ${midY} ${cx - bs / 2 - 4} ${midY}`;
+    wire(d, !isLive);
+    if (isLive) { const dur = recent ? 2.6 : 5.5; for (let k = 0; k < 2; k++) dot(d, dur, k * dur / 2, false, nodeColor(n.id)); flowLive.push({ d, color: nodeColor(n.id) }); }
+  });
+  if (!left.length) addText(g, "sub", 30, midY + 4, "No other nodes heard yet");
+  if (more > 0) addText(g, "sub", 30, H - 8, "+ " + more + " more in the table below");
+  // centre: this board
+  deviceIcon(g, me.hw, cx - bs / 2, midY - bs / 2, bs, true);
+  if (me.id) g.appendChild(sv("circle", { cx: cx - bs / 2 + 12, cy: midY - bs / 2 + 12, r: 5, fill: nodeColor(me.id) }));
+  addText(g, "", cx, midY + bs / 2 + 22, me.long || me.id || "This board", "middle");
+  addText(g, "sub", cx, midY + bs / 2 + 38, "this node", "middle");
+  // right: outputs
+  const yo = (H - outs.length * ROW) / 2 + ROW / 2;
+  outs.forEach((o, i) => {
+    const y = yo + i * ROW;
+    const d = `M${cx + bs / 2 + 4} ${midY} C 630 ${midY} 640 ${y} 700 ${y}`;
+    wire(d, !o.on);
+    if (o.on) for (let k = 0; k < 2; k++) dot(d, o.dur, k * o.dur / 2, true);
+    g.appendChild(sv("circle", { cx: 712, cy: y, r: 6, fill: o.on ? "var(--s2)" : "none", stroke: o.on ? "var(--s2)" : "var(--axis)", "stroke-width": 1.6 }));
+    addText(g, "", 728, y - 3, o.label);
+    flowRefs["o" + o.key] = addText(g, "sub", 728, y + 14, o.sub);
+    if (!o.on) g.lastChild.textContent = o.sub;
+  });
+  svg.appendChild(dots); box.appendChild(svg);
+  renderFlow._svg = svg;
+  left.forEach((n) => { const r = flowRefs["n" + n.id]; r.textContent = (n.snr == null ? "–" : n.snr + " dB") + " · " + (n.hops == null ? "?" : n.hops + " hop" + (n.hops === 1 ? "" : "s")) + " · " + (n.last_heard ? ago(n.last_heard) : "never"); });
+}
+let ledTotal = null;
+function echoLeds() {             // the drawer and its tab blink whenever the board passes on a packet
+  if (!S) return;
+  const total = S.packets.total;
+  if (ledTotal != null && total > ledTotal) { flash($("tabLed")); flash($("sumLed")); }
+  const recent = ledTotal != null && total > ledTotal;
+  ledTotal = total;
+  [$("tabLed"), $("sumLed")].forEach((l) => { if (recent) l.dataset.last = S.now; l.classList.toggle("warm", !!l.dataset.last && S.now - +l.dataset.last < 30); });
+}
+function flowBurst() {            // a quick extra dot whenever new packets arrive
+  echoLeds();
+  if (!S || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const total = S.packets.total;
+  if (lastTotal != null && total > lastTotal && flowLive.length && renderFlow._svg) {
+    const f = flowLive[Math.floor(Math.random() * flowLive.length)], d = f.d;
+    const e = sv("circle", { r: 5, class: "burst", fill: f.color });
+    e.style.offsetPath = "path('" + d + "')"; e.style.animation = "none";
+    renderFlow._svg.querySelector("#flowdots").appendChild(e);
+    const a = e.animate([{ offsetDistance: "0%", opacity: 1 }, { offsetDistance: "100%", opacity: 1 }], { duration: 900, easing: "ease-in" });
+    a.onfinish = () => e.remove();
+  }
+  lastTotal = total;
+}
+
+/* ---------- raw data drawer ---------- */
+let rawTab = "packets", rawSince = 0, rawPaused = false, rawTimer = null;
+function rawHeaders() { const t = $("rawToken").value; return t ? { "X-Panel-Token": t } : {}; }
+async function rawGet(url) {
+  const r = await fetch(url, { headers: rawHeaders(), cache: "no-store" });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.ok) throw new Error(j.message || ("HTTP " + r.status));
+  return j;
+}
+async function loadInfo() {
+  $("rawMsg").textContent = "Loading…";
+  try { const j = await rawGet("/api/raw/info"); $("rawOut").textContent = j.text; $("rawMsg").textContent = "Loaded " + new Date().toLocaleTimeString(); }
+  catch (e) { $("rawMsg").textContent = "Could not load: " + e.message; }
+}
+const PKT_TYPES = [
+  ["TEXT_MESSAGE_APP", "Text"], ["POSITION_APP", "Position"], ["NODEINFO_APP", "Node info"],
+  ["TELEMETRY_APP", "Telemetry"], ["PAXCOUNTER_APP", "Paxcounter"], ["ROUTING_APP", "Routing"],
+  ["ENCRYPTED", "Encrypted"], ["OTHER", "Other"]];
+const ledState = { types: {}, nodes: {} };      // key -> {count, last}
+function typeKey(port) { return PKT_TYPES.some(([k]) => k === port) ? port : "OTHER"; }
+function nodeName(id) {
+  const n = S && S.nodes.find((x) => x.id === id);
+  return n ? (n.short || n.long || id) : (id || "unknown");
+}
+function flash(led) {
+  led.classList.remove("on"); void led.offsetWidth; led.classList.add("on");
+  setTimeout(() => led.classList.remove("on"), 260);
+}
+function ledChip(map, key, label) {
+  let c = map.querySelector('[data-k="' + CSS.escape(key) + '"]');
+  if (!c) {
+    c = el("span", "ledchip"); c.dataset.k = key;
+    c.appendChild(el("span", "led")); c.appendChild(document.createTextNode(label + " "));
+    if (map.id === "ledNodes") c.insertBefore(spot(key), c.childNodes[1]);
+    c.appendChild(el("b", "", "0")); map.appendChild(c);
+  }
+  return c;
+}
+function buildLedRows() {
+  const types = $("ledTypes");
+  if (!types.childElementCount) {
+    const rx = ledChip(types, "ALL", "RX"); rx.style.fontWeight = "600";
+    PKT_TYPES.forEach(([k, l]) => ledChip(types, k, l));
+  }
+}
+function bump(group, mapEl, key, label, ts, live) {
+  const st = ledState[group][key] || (ledState[group][key] = { count: 0, last: 0 });
+  st.count++; st.last = Math.max(st.last, ts);
+  const c = ledChip(mapEl, key, label);
+  c.querySelector("b").textContent = String(st.count);
+  if (live) flash(c.querySelector(".led"));
+}
+function warmLeds() {        // LEDs stay softly lit for 30 s after activity
+  const now = S ? S.now : Date.now() / 1000;
+  const warmGroup = (group, mapEl) => mapEl.querySelectorAll(".ledchip").forEach((c) => {
+    const st = ledState[group][c.dataset.k]; c.querySelector(".led").classList.toggle("warm", !!st && now - st.last < 30);
+  });
+  warmGroup("types", $("ledTypes")); warmGroup("nodes", $("ledNodes"));
+  document.querySelectorAll("#pktList details.pkt").forEach((d) => d.querySelector(".led").classList.toggle("warm", now - +d.dataset.ts < 30));
+  document.querySelectorAll("#ledNodes .ledchip").forEach((c) => { const t = c.childNodes[2]; const nm = nodeName(c.dataset.k) + " "; if (t.textContent !== nm) t.textContent = nm; });
+}
+function pktRow(p, live) {
+  const d = el("details", "pkt"); d.dataset.ts = p.ts;
+  const sm = el("summary");
+  const led = el("span", "led"); sm.appendChild(led);
+  sm.appendChild(el("span", "t", new Date(p.ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" })));
+  const lbl = (PKT_TYPES.find(([k]) => k === p.port) || [0, prettyPort(p.port || "?")])[1];
+  sm.appendChild(el("span", "type", lbl));
+  const who = el("span", "who"); who.appendChild(spot(p.from)); who.appendChild(document.createTextNode(nodeName(p.from)));
+  if (p.to && p.to !== "everyone") { who.appendChild(document.createTextNode(" → ")); who.appendChild(spot(p.to)); who.appendChild(document.createTextNode(nodeName(p.to))); }
+  sm.appendChild(who);
+  sm.appendChild(el("span", "what", p.summary || ""));
+  const sg = el("span", "sig");
+  if (p.via_mqtt) sg.appendChild(el("span", "", "via MQTT "));
+  if (p.snr != null) sg.appendChild(icoSnr(p.snr));
+  if (p.rssi != null) sg.appendChild(icoRssi(p.rssi));
+  if (p.hops != null) sg.appendChild(icoHops(p.hops));
+  sg.appendChild(el("span", "chev", "›")); sm.appendChild(sg);
+  d.appendChild(sm);
+  const pre = el("pre"); d.appendChild(pre);
+  d.addEventListener("toggle", () => { if (d.open && !pre.textContent) pre.textContent = p.body; });  // fill on first open
+  d._body = p.body;
+  if (live) { led.classList.add("on"); setTimeout(() => led.classList.remove("on"), 1200); }
+  return d;
+}
+function addPackets(items, live) {
+  buildLedRows();
+  const list = $("pktList");
+  const empty = list.querySelector(".empty"); if (empty) empty.remove();
+  items.forEach((p, i) => {
+    const isLive = live && i >= items.length - 12;     // don't flash a whole backlog
+    bump("types", $("ledTypes"), "ALL", "RX", p.ts, isLive);
+    const k = typeKey(p.port); bump("types", $("ledTypes"), k, (PKT_TYPES.find(([x]) => x === k) || [0, k])[1], p.ts, isLive);
+    if (p.from) bump("nodes", $("ledNodes"), p.from, nodeName(p.from), p.ts, isLive);
+    list.insertBefore(pktRow(p, isLive), list.firstChild);   // newest at the top; open rows keep their state
+  });
+  while (list.childElementCount > 150) list.removeChild(list.lastChild);
+  if (!list.childElementCount) list.appendChild(el("div", "empty", "Waiting for packets…"));
+  warmLeds();
+}
+function resetPackets() {
+  rawSince = 0; ledState.types = {}; ledState.nodes = {};
+  clear($("ledTypes")); clear($("ledNodes")); clear($("pktList"));
+  $("pktList").appendChild(el("div", "empty", "Waiting for packets…"));
+}
+async function loadPackets() {
+  if (rawPaused || rawTab !== "packets" || !$("raw").open) return;
+  try {
+    const first = rawSince === 0;
+    const j = await rawGet("/api/raw/packets?since=" + rawSince);
+    if (j.items.length) { rawSince = j.items[j.items.length - 1].ts; addPackets(j.items, !first); }
+    else warmLeds();
+    $("rawMsg").textContent = "Live · " + $("pktList").querySelectorAll("details.pkt").length + " shown · click a row for its JSON";
+  } catch (e) { $("rawMsg").textContent = "Could not load: " + e.message; }
+}
+function rawShow() {
+  $("rawTokenWrap").hidden = !(S && S.auth_required);
+  const pk = rawTab === "packets";
+  $("rawPause").hidden = !pk; $("pktExpand").hidden = !pk; $("pktCollapse").hidden = !pk;
+  $("rawOut").hidden = pk; $("pktView").hidden = !pk;
+  document.querySelectorAll("#rawTabs button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.t === rawTab)));
+  clearInterval(rawTimer); rawTimer = null;
+  if (!$("raw").open) return;
+  if (rawTab === "info") loadInfo();
+  else { resetPackets(); loadPackets(); rawTimer = setInterval(loadPackets, 2000); }
+}
+$("raw").addEventListener("toggle", rawShow);
+document.querySelectorAll("#rawTabs button").forEach((b) => b.addEventListener("click", () => { rawTab = b.dataset.t; rawShow(); }));
+$("rawRefresh").addEventListener("click", () => { if (rawTab === "info") loadInfo(); else { resetPackets(); loadPackets(); } });
+$("pktExpand").addEventListener("click", () => document.querySelectorAll("#pktList details.pkt").forEach((d) => { d.open = true; }));
+$("pktCollapse").addEventListener("click", () => document.querySelectorAll("#pktList details.pkt").forEach((d) => { d.open = false; }));
+$("rawPause").addEventListener("click", () => { rawPaused = !rawPaused; $("rawPause").textContent = rawPaused ? "Resume" : "Pause"; $("rawPause").setAttribute("aria-pressed", String(rawPaused)); if (!rawPaused) loadPackets(); else $("rawMsg").textContent = "Paused"; });
+$("rawCopy").addEventListener("click", async () => {
+  const txt = rawTab === "packets"
+    ? [...document.querySelectorAll("#pktList details.pkt")].reverse().map((d) => d._body).join("\n")
+    : $("rawOut").textContent;
+  try { await navigator.clipboard.writeText(txt); $("rawMsg").textContent = "Copied"; }
+  catch (e) { const r = document.createRange(); r.selectNodeContents(rawTab === "packets" ? $("pktList") : $("rawOut")); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); $("rawMsg").textContent = "Selected — press Ctrl/Cmd+C"; }
+});
+
+/* ---------- board / USB details popover ---------- */
+function when(ts) {
+  if (!ts) return "–";
+  const d = new Date(ts * 1000), today = new Date().toDateString() === d.toDateString();
+  return (today ? "" : d.toLocaleDateString([], { day: "numeric", month: "short" }) + " ") + clock(ts) + " (" + ago(ts) + ")";
+}
+function yesno(v) { return v == null ? "–" : v ? "Yes" : "No"; }
+function renderConnInfo() {
+  const box = $("connInfo"); clear(box);
+  const c = S.conn || {}, u = c.usb || {}, n = S.node, last = S.last_board;
+  const group = (title, rows) => {
+    rows = rows.filter((r) => r[1] != null && r[1] !== "");
+    if (!rows.length) return;
+    box.appendChild(el("h3", "", title));
+    const dl = el("dl");
+    rows.forEach(([k, v]) => { dl.appendChild(el("dt", "", k)); dl.appendChild(el("dd", "", String(v))); });
+    box.appendChild(dl);
+  };
+  group("Connection", [
+    ["Status", S.connected ? "Connected" : (S.switch.state === "waiting" ? "Restarting" : "Not connected")],
+    ["USB port", c.device_path || (S.port === "auto" ? "auto-detect" : S.port)],
+    ["Connected since", S.connected ? when(c.connected_at) : null],
+    ["Last connected", S.connected ? null : (c.last_connected ? when(c.last_connected) : "never")],
+    ["Last disconnect", c.last_lost ? when(c.last_lost) : null],
+    ["Connections", c.connects ? c.connects + " since the panel started" : null],
+    ["Last error", c.last_error ? c.last_error + " · " + ago(c.last_error_at) : null],
+  ]);
+  group("USB device", [
+    ["Chip", u.usb_description], ["Maker", u.usb_manufacturer],
+    ["VID:PID", u.usb_vid_pid], ["Serial no.", u.usb_serial],
+  ]);
+  const b = n || last;
+  if (b) {
+    group(n ? "Board" : "Last board seen", [
+      ["Name", (b.long || "–") + (b.short ? " (" + b.short + ")" : "")],
+      ["Node ID", b.id], ["Model", b.hw], ["Firmware", b.fw || "unknown"],
+      ["MAC address", b.mac || "not reported"],
+      ["Role", n ? n.role : null],
+      ["Uptime", n && n.uptime != null ? dur(n.uptime) : null],
+      ["Reboots", n ? n.reboots : null],
+      ["WiFi", n ? yesno(n.has_wifi) : null], ["Bluetooth", n ? yesno(n.has_bluetooth) : null],
+      ["DM encryption", n ? yesno(n.has_pkc) : null],
+    ]);
+    if (n && n.has_pkc === false) box.appendChild(el("div", "note", "⚠ This firmware has no direct-message encryption, so private messages to newer nodes won't work. Updating the firmware fixes it."));
+    if (n && (!n.hw || n.hw === "UNSET")) box.appendChild(el("div", "note", "⚠ The firmware doesn't report a board model; it may be an old or mismatched build."));
+  } else box.appendChild(el("div", "note", "No board has been connected since the panel started."));
+}
+function toggleConnInfo(open) {
+  const pop = $("connInfo"), btn = $("connInfoBtn");
+  open = open === undefined ? pop.hidden : open;
+  pop.hidden = !open; btn.setAttribute("aria-expanded", String(open));
+  if (open && S) renderConnInfo();
+}
+$("connInfoBtn").addEventListener("click", (e) => { e.stopPropagation(); toggleConnInfo(); });
+document.addEventListener("click", (e) => { if (!$("connInfo").hidden && !e.target.closest(".connwrap")) toggleConnInfo(false); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("connInfo").hidden) { toggleConnInfo(false); $("connInfoBtn").focus(); } });
+
+/* ---------- polling ---------- */
+function renderAll() {
+  renderHeader(); renderModes(); renderHero(); renderLegend(); drawChart(); renderTable();
+  renderTiles(); cleanExtra(); renderPackets(); renderNodes(); renderEvents(); flowBurst(); renderFlow();
+}
+let busyPoll = false;
+async function poll() {
+  if (busyPoll) return; busyPoll = true;
+  try {
+    const r = await fetch("/api/state", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const next = await r.json();
+    document.body.classList.remove("stale");
+    if (!document.querySelector(".banner.on") || $("banner").textContent.startsWith("Lost contact")) hideBanner();
+    S = next;
+    if (hoverIdx == null) renderAll(); else { renderHeader(); renderModes(); renderHero(); renderTiles(); cleanExtra(); renderPackets(); renderNodes(); renderEvents(); flowBurst(); renderFlow(); }
+  } catch (e) {
+    document.body.classList.add("stale");
+    showBanner("Lost contact with the panel server. Showing the last data it sent.");
+  } finally { busyPoll = false; }
+}
+poll(); setInterval(poll, 2000);
+</script>
+</body>
+</html>

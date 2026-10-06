@@ -1,0 +1,24 @@
+---
+layout: null
+permalink: /llms.txt
+---
+# Meshtastic LoRa mesh for Kathmandu
+
+> A beginner-friendly guide and open-source web control panel for Meshtastic LoRa mesh radios in Nepal (region NP_865, 865–868 MHz; the default LongFast channel is on 867.875 MHz). It covers Heltec WiFi LoRa 32 V3 and Seeed XIAO ESP32S3 + Wio-SX1262 boards, the Paxcounter, MQTT map reporting to meshmap.net, and troubleshooting. Code is GPL-3.0; the guide is CC BY-SA 4.0. Not affiliated with Meshtastic LLC.
+
+Key facts: Nepal uses NP_865 (865.0–868.0 MHz, 100% duty cycle, max 30 dBm). LoRa on Meshtastic's LONG_FAST preset runs at about 1 kbit/s over kilometres. All nodes must share region, preset, channel name and key, and should share firmware version: in this project a Heltec V3 on 2.7.26 could not hear XIAO boards on 2.5.2 until it was reflashed to match. Paxcounter needs an ESP32 with WiFi and Bluetooth off.
+
+## Guide
+- [LoRa for WiFi and Bluetooth users]({{ site.url }}{{ site.baseurl }}/lora-for-wifi-and-bluetooth-users.html): range, speed, frequency, mesh, LoRa vs LoRaWAN
+- [Hardware]({{ site.url }}{{ site.baseurl }}/hardware.html): Heltec V3, Seeed XIAO ESP32S3 + Wio-SX1262, band variants, antennas
+- [Getting started]({{ site.url }}{{ site.baseurl }}/getting-started.html): flash, set NP_865, CLI commands
+- [Nepal NP_865]({{ site.url }}{{ site.baseurl }}/nepal-np865.html): region table and how 867.875 MHz is derived
+- [Paxcounter]({{ site.url }}{{ site.baseurl }}/paxcounter.html): counting nearby devices
+- [Map reporting and MQTT]({{ site.url }}{{ site.baseurl }}/map-reporting-mqtt.html): meshmap.net checklist
+- [Control panel]({{ site.url }}{{ site.baseurl }}/control-panel.html): Flask dashboard and mode switcher
+- [Troubleshooting]({{ site.url }}{{ site.baseurl }}/troubleshooting.html)
+- [FAQ]({{ site.url }}{{ site.baseurl }}/faq.html) · [Glossary]({{ site.url }}{{ site.baseurl }}/glossary.html) · [Links]({{ site.url }}{{ site.baseurl }}/resources.html)
+
+## Source
+- [GitHub repository](https://github.com/{{ site.repository }})
+- [Meshtastic documentation](https://meshtastic.org/docs/introduction/)
