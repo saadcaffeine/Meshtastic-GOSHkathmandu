@@ -18,6 +18,7 @@ from datetime import datetime
 
 from flask import Flask, Response, jsonify, request, send_from_directory
 
+import modules as addons
 from radio import MODES, MockRadio, RealRadio, detect_mode, preset_channel_name
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -161,11 +162,19 @@ class Panel:
             with open(self.csv_path, "w", newline="") as f:
                 csv.writer(f).writerow(["time", "from", "wifi", "ble", "total"])
         self._last_sim = 0.0
+        self.modules = []
+        names = [n.strip() for n in (args.modules or "").split(",") if n.strip() and n.strip() != "none"]
+        self.modules = addons.load(names, self)
 
     # ----- hooks called by the radio layer -----
     def event(self, msg):
         with self.lock:
             self.events.appendleft({"ts": time.time(), "msg": msg})
+        for m in getattr(self, "modules", []):
+            try:
+                m.on_event(msg)
+            except Exception:
+                pass
 
     def packet(self, p):
         with self.lock:
@@ -183,6 +192,11 @@ class Panel:
                         n[k] = p[k]
 
     def raw(self, p):
+        for m in self.modules:                  # add-on modules see every packet first
+            try:
+                m.on_packet(p)
+            except Exception as e:
+                self.event("module %s: %s" % (m.id, str(e)[:120]))
         d = p.get("decoded") or {}
         port = d.get("portnum", "ENCRYPTED")
         frm = p.get("fromId") or ("!%08x" % p["from"] if isinstance(p.get("from"), int) else None)
@@ -291,6 +305,13 @@ class Panel:
                                    "check the USB cable and the event log")
 
     # ----- building the state the page shows -----
+    @staticmethod
+    def _mod_state(m):
+        try:
+            return m.state()
+        except Exception as e:
+            return {"error": str(e)[:120]}
+
     def merged_nodes(self, db_nodes):
         """Board's node list + what this panel heard itself (timed by this computer's clock,
         which is reliable even when the board has no GPS or time)."""
@@ -356,6 +377,7 @@ class Panel:
             "pax": {"history": [[round(r["ts"], 1), r["wifi"], r["ble"]] for r in history]},
             "nodes": self.merged_nodes(snap["nodes"]),
             "panel_started": self.started,
+            "modules": {m.id: self._mod_state(m) for m in self.modules},
             "packets": {"total": sum(by_port.values()), "by_port": by_port, **heard},
             "broker": self.broker.stats(),
             "events": events,
@@ -372,6 +394,8 @@ def create_app(panel):
     def authorized():
         return (not panel.token) or hmac.compare_digest(
             request.headers.get("X-Panel-Token", ""), panel.token)
+
+    addons.mount(app, panel, panel.modules, authorized)
 
     @app.get("/api/raw/info")
     def raw_info():
@@ -445,9 +469,14 @@ def main():
     ap.add_argument("--broker-port", type=int, default=1883)
     ap.add_argument("--broker-user", default="meshdev")      # public default login
     ap.add_argument("--broker-pass", default="large4cats")   # public default login
+    ap.add_argument("--modules", default=",".join(addons.DEFAULT_MODULES),
+                    help="add-on modules to load, comma-separated, or 'none' (available: %s)"
+                         % ", ".join(addons.available()))
     args = ap.parse_args()
 
     panel = Panel(args)
+    for m in panel.modules:
+        m.start()
     panel.radio.start()
     if args.host != "127.0.0.1" and not panel.token:
         print("WARNING: listening on %s with no --token. Anyone who can reach this "

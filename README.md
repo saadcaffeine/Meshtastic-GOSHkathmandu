@@ -25,7 +25,7 @@ This project is a tech demo and an educational experiment with LoRa and sensors 
 
 | Folder | What it is |
 |---|---|
-| [`panel/`](panel/) | A **web control panel** that runs on the computer the board is plugged into (Mac, Linux or Raspberry Pi). It switches the board between operating modes and shows a live dashboard: nearby devices (Paxcounter), nodes and signal, packets, battery, channel use and a raw packet log. |
+| [`panel/`](panel/) | A **web control panel** that runs on the computer the board is plugged into (Mac, Linux or Raspberry Pi). It switches the board between operating modes and shows a live dashboard: nearby devices (Paxcounter), nodes and signal, packets, battery, channel use and a raw packet log. Optional **add-on modules** extend it; the first, **Messages**, lets you read and send channel and direct messages. |
 | [`tools/`](tools/) | **Diagnostic scripts**: `radio_check.py` compares two boards' radio settings and listens for each other; `paxwatch.py` prints Paxcounter counts and packet totals in the terminal. |
 | [`docs/`](docs/) | **The guide**, published with GitHub Pages: LoRa for WiFi and Bluetooth users, hardware, first setup, Nepal's NP_865 region, Paxcounter, map reporting, troubleshooting, FAQ and a glossary. |
 

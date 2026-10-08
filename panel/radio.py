@@ -328,6 +328,29 @@ class RealRadio:
             base["error"] = "reading board: %s" % str(e)[:120]
         return base
 
+    def channels(self):
+        """Active channels: [{index, name, role}]. The primary's empty name becomes the preset name."""
+        iface = self.iface
+        if iface is None:
+            return []
+        node = iface.localNode
+        preset = _enum_name(node.localConfig.lora, "modem_preset")
+        out = []
+        for c in node.channels or []:
+            role = _enum_name(c, "role")
+            if role == "DISABLED":
+                continue
+            out.append({"index": c.index, "role": role,
+                        "name": c.settings.name or (preset_channel_name(preset) if role == "PRIMARY" else "Channel %d" % c.index)})
+        return out
+
+    def send_text(self, text, dest="^all", channel_index=0, on_ack=None):
+        iface = self.iface
+        if iface is None:
+            raise RuntimeError("board not connected")
+        pkt = _send_text(iface, text, dest, channel_index, on_ack)
+        return {"id": getattr(pkt, "id", None)}
+
     def raw_info(self):
         """Everything the board reports, roughly what `meshtastic --info` prints.
         Secrets are removed by the caller."""
@@ -383,6 +406,23 @@ class RealRadio:
                 self.h.event("settings sent for mode: " + mode["label"])
             finally:
                 self.busy = False
+
+
+def _send_text(iface, text, dest, channel_index, on_ack):
+    """sendText with an ACK callback, across Python-library versions."""
+    import inspect
+    def cb(pkt):
+        try:
+            routing = (pkt.get("decoded") or {}).get("routing") or {}
+            on_ack(routing.get("errorReason", "NONE"))
+        except Exception:
+            pass
+    kw = dict(destinationId=dest, wantAck=True, channelIndex=channel_index)
+    if on_ack:
+        kw["onResponse"] = cb
+        if "onResponseAckPermitted" in inspect.signature(iface.sendText).parameters:
+            kw["onResponseAckPermitted"] = True     # call back on plain ACKs too
+    return iface.sendText(text, **kw)
 
 
 class MockRadio:
@@ -443,8 +483,12 @@ class MockRadio:
                 port = random.choice(["NODEINFO_APP", "POSITION_APP", "TEXT_MESSAGE_APP",
                                       "PAXCOUNTER_APP", "TELEMETRY_APP", "ENCRYPTED"])
                 dec = {"portnum": port}
+                dm = False
                 if port == "TEXT_MESSAGE_APP":
-                    dec.update(text="namaste from the bench", payload=b"namaste from the bench")
+                    t = random.choice(["namaste from the bench", "anyone on LongFast?", "signal check: hearing you 5/5",
+                                       "paxcounter says 12 people in the lab", "testing from the roof"])
+                    dec.update(text=t, payload=t.encode())
+                    dm = random.random() < 0.3
                 elif port == "NODEINFO_APP":
                     dec.update(user={"id": o["id"], "longName": o["long"], "hwModel": o["hw"]})
                 elif port == "PAXCOUNTER_APP":
@@ -454,7 +498,8 @@ class MockRadio:
                                                             "channelUtilization": 3.2}})
                 elif port == "POSITION_APP":
                     dec.update(position={"latitude": 27.70, "longitude": 85.32})
-                pkt = {"fromId": o["id"], "toId": "^all", "rxSnr": o["snr"], "rxRssi": -40 - random.randint(0, 40),
+                pkt = {"fromId": o["id"], "toId": "!a1f80938" if dm else "^all", "channel": 0,
+                       "id": random.randrange(1, 1 << 31), "rxSnr": o["snr"], "rxRssi": -40 - random.randint(0, 40),
                        "hopStart": 3, "hopLimit": 3 - o["hops"]}
                 if port != "ENCRYPTED":
                     pkt["decoded"] = dec
@@ -501,6 +546,19 @@ class MockRadio:
         self.last_board = {k: base["node"].get(k) for k in ("id", "long", "short", "hw", "fw", "mac")}
         base["last_board"] = self.last_board
         return base
+
+    def channels(self):
+        return [{"index": 0, "role": "PRIMARY", "name": "LongFast"}] if self._up() else []
+
+    def send_text(self, text, dest="^all", channel_index=0, on_ack=None):
+        if not self._up():
+            raise RuntimeError("board not connected")
+        pid = random.randrange(1, 1 << 31)
+        if on_ack:   # pretend the mesh answers after a moment; DMs to unknown nodes fail
+            known = dest == "^all" or any(o["id"] == dest for o in self.others)
+            threading.Timer(random.uniform(1.5, 4), on_ack,
+                            args=("NONE" if known and random.random() > 0.15 else "MAX_RETRANSMIT",)).start()
+        return {"id": pid}
 
     def raw_info(self):
         c = self.cfg

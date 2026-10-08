@@ -28,6 +28,7 @@ Then open <http://127.0.0.1:8080>.
 | `--mock` | simulate a board (good for demos and development) |
 | `--host 0.0.0.0 --token SECRET` | open the panel to your network; changing modes then needs the token |
 | `--web-port 8080` | the web page's port |
+| `--modules messages` | which add-on modules to load (`none` for none) |
 
 ## Operating modes
 
@@ -52,6 +53,28 @@ Changing modes writes the settings and the board reboots; the panel waits for it
 - **Raw data:** live packets with LED activity lights by type and by node, one line per packet that expands to its JSON, plus the full board settings. **Private keys, channel keys and passwords are hidden.**
 
   ![Live packets with LED indicators and expandable JSON](assets/img/panel-live-packets.png)
+
+## Messages (add-on)
+
+The **Messages** card works like a simplified Meshtastic app:
+
+- **Conversations:** channels (for example `#LongFast`) and direct messages, with unread counts. Start a direct message with any node from the dropdown.
+- **Messages:** incoming bubbles show the sender in their node colour, the time, SNR and hops. Your own messages show their delivery status: *sending → sent → heard by the mesh* (channel) or *delivered* (direct), or *no answer* / *not delivered*.
+- **Sending:** Enter sends and Shift+Enter starts a new line. A counter keeps you under Meshtastic's 200-byte limit (emoji and Nepali script take several bytes per character). With `--token`, sending needs the token.
+- History is saved on the computer in `panel/data/messages.jsonl`.
+
+![Messages add-on with a channel conversation and a direct message](assets/img/panel-messages.png)
+
+## Add-on modules
+
+Messages is an **add-on module**. Modules are optional cards with their own code in `panel/modules/<name>/`, so new features can be added without touching the core panel:
+
+```bash
+python server.py --modules messages   # choose modules (comma-separated)
+python server.py --modules none       # core panel only
+```
+
+To write one, see the template in [`panel/modules/README.md`](https://github.com/saadcaffeine/Meshtastic-GOSHkathmandu/blob/main/panel/modules/README.md). A module can react to every packet, add API endpoints and draw its own card using the panel's colours and icons.
 
 ## Reading the indicators
 

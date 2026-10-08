@@ -199,6 +199,8 @@
   #nodes td.num { white-space: nowrap; }
   .tablead { margin-left: 6px; width: 8px; height: 8px; vertical-align: 1px; }
   details.rawbox > summary .led { margin-left: 8px; width: 8px; height: 8px; vertical-align: 1px; }
+  /* add-on module cards */
+  .modcard h2 .modtag { font-weight: 500; color: var(--muted); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; margin-left: 8px; }
   :focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
 </style>
 </head>
@@ -272,6 +274,8 @@
         <span class="muted">Dashed lines are quiet or switched off. Pictures come from meshtastic.org when your browser is online; otherwise a drawn shape is used.</span>
       </div>
     </section>
+
+    <div id="modulesRoot"></div>
 
     <section class="card" aria-label="Node status">
       <h2>Node status</h2>
@@ -1149,10 +1153,62 @@ $("connInfoBtn").addEventListener("click", (e) => { e.stopPropagation(); toggleC
 document.addEventListener("click", (e) => { if (!$("connInfo").hidden && !e.target.closest(".connwrap")) toggleConnInfo(false); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("connInfo").hidden) { toggleConnInfo(false); $("connInfoBtn").focus(); } });
 
+/* ---------- add-on module API ----------
+   A module's script calls Panel.registerModule({ id, mount(el), update(S) }).
+   - mount(el): build the module's UI inside its card (el), once.
+   - update(S): called after every poll with the latest /api/state (S.modules[id] holds the module's own summary).
+   Helpers in Panel.util; Panel.api(path, {method, body}) adds the access token. Insert untrusted text with textContent only. */
+window.Panel = {
+  _defs: {}, _cards: {}, _info: {},
+  util: { el, sv, clear, spot: (id) => spot(id), nodeColor: (id) => nodeColor(id), nodeName: (id) => nodeName(id),
+          ago: (ts) => ago(ts), clock: (ts) => clock(ts), icoSnr: (v) => icoSnr(v), icoRssi: (v) => icoRssi(v),
+          icoHops: (v) => icoHops(v), flash: (l) => flash(l) },
+  state() { return S; },
+  token() {
+    for (const id of ["token", "rawToken"]) { const e = $(id); if (e && e.value) return e.value; }
+    try { return sessionStorage.getItem("panelToken") || ""; } catch (e) { return ""; }
+  },
+  setToken(t) { try { sessionStorage.setItem("panelToken", t); } catch (e) {} if ($("token") && !$("token").value) $("token").value = t; },
+  async api(path, opts = {}) {
+    const headers = { "Content-Type": "application/json" }, t = Panel.token();
+    if (t) headers["X-Panel-Token"] = t;
+    const r = await fetch(path, { method: opts.method || "GET", headers, cache: "no-store",
+                                  body: opts.body ? JSON.stringify(opts.body) : undefined });
+    const j = await r.json().catch(() => ({ ok: false, message: "HTTP " + r.status }));
+    j.status = r.status; return j;
+  },
+  registerModule(def) {
+    Panel._defs[def.id] = def;
+    const card = Panel._cards[def.id];
+    if (!card) return;
+    try { def.mount(card.body); if (S && def.update) def.update(S); }
+    catch (e) { card.body.textContent = "This module failed to start: " + e.message; }
+  },
+  _update() {
+    Object.values(Panel._defs).forEach((d) => { try { if (d.update) d.update(S); } catch (e) { console.error(d.id, e); } });
+  },
+  async _load() {
+    let list;
+    try { list = await (await fetch("/api/modules", { cache: "no-store" })).json(); } catch (e) { return; }
+    const root = $("modulesRoot");
+    (list.enabled || []).forEach((m) => {
+      const card = el("section", "card modcard"); card.id = "mod-" + m.id; card.setAttribute("aria-label", m.title);
+      const h = el("h2", "", m.title); h.appendChild(el("span", "modtag", "add-on")); h.title = m.description; card.appendChild(h);
+      const body = el("div", "modbody"); card.appendChild(body); root.appendChild(card);
+      Panel._cards[m.id] = { card, body }; Panel._info[m.id] = m;
+      if (m.assets.css) { const l = document.createElement("link"); l.rel = "stylesheet"; l.href = m.assets.css; document.head.appendChild(l); }
+      if (m.assets.js) { const sc = document.createElement("script"); sc.src = m.assets.js; sc.defer = true;
+        sc.onerror = () => { body.textContent = "Could not load this module's script."; }; document.head.appendChild(sc); }
+    });
+  },
+};
+Panel._load();
+
 /* ---------- polling ---------- */
 function renderAll() {
   renderHeader(); renderModes(); renderHero(); renderLegend(); drawChart(); renderTable();
   renderTiles(); cleanExtra(); renderPackets(); renderNodes(); renderEvents(); flowBurst(); renderFlow();
+  Panel._update();
 }
 let busyPoll = false;
 async function poll() {
@@ -1164,7 +1220,7 @@ async function poll() {
     document.body.classList.remove("stale");
     if (!document.querySelector(".banner.on") || $("banner").textContent.startsWith("Lost contact")) hideBanner();
     S = next;
-    if (hoverIdx == null) renderAll(); else { renderHeader(); renderModes(); renderHero(); renderTiles(); cleanExtra(); renderPackets(); renderNodes(); renderEvents(); flowBurst(); renderFlow(); }
+    if (hoverIdx == null) renderAll(); else { renderHeader(); renderModes(); renderHero(); renderTiles(); cleanExtra(); renderPackets(); renderNodes(); renderEvents(); flowBurst(); renderFlow(); Panel._update(); }
   } catch (e) {
     document.body.classList.add("stale");
     showBanner("Lost contact with the panel server. Showing the last data it sent.");

@@ -37,6 +37,21 @@ Without a token, anyone on the network could change your board's settings. Type 
 
 The panel never changes WiFi names or passwords. Settings a firmware doesn't support are skipped and noted in the event log.
 
+## Add-on modules
+
+The panel can load optional add-on modules, each with its own card:
+
+| Module | What it does |
+|---|---|
+| `messages` *(on by default)* | Channel and direct messages: read, reply and start a direct message. Shows delivery status (sent, heard by the mesh, delivered, no answer, failed), signal and hops, unread counts, and a 200-byte counter. History is kept in `data/messages.jsonl`. |
+
+```bash
+python server.py --modules messages   # pick modules
+python server.py --modules none       # core panel only
+```
+
+Sending a message needs the access token when the panel runs with `--token`. To write your own module, see [`modules/README.md`](modules/README.md).
+
 ## Files
 
 | File | Purpose |
@@ -45,11 +60,12 @@ The panel never changes WiFi names or passwords. Settings a firmware doesn't sup
 | `radio.py` | Board connection (auto-reconnect), mode definitions, and a `MockRadio` for testing |
 | `static/index.html` | The whole dashboard: one offline HTML file, no build step |
 | `static/devices/` | *(optional)* local copies of [device pictures](https://flasher.meshtastic.org/) as `<name>.svg`, used before the online ones |
-| `data/pax_log.csv` | Paxcounter readings (created at runtime, git-ignored) |
+| `modules/` | Add-on modules (`messages/`, plus the loader and a template in `modules/README.md`) |
+| `data/` | Runtime data, git-ignored: `pax_log.csv` (Paxcounter readings), `messages.jsonl` (message history) |
 
 ## Privacy
 
-The raw-data view hides private keys, channel keys and passwords. Paxcounter logs contain only counts.
+The raw-data view hides private keys, channel keys and passwords. Paxcounter logs contain only counts. Message history stays on this computer in `data/messages.jsonl`; delete the file to clear it.
 
 ## Known limits
 
